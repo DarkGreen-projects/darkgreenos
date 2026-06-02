@@ -1,0 +1,5 @@
+; Copy to repo-local config (optional):
+;   git config --local user.name "DarkGreen-projects"
+;   git config --local user.email "57951127+DarkGreen-projects@users.noreply.github.com"
+;
+; Prevents commits attributed to "feded" (WSL username) or wrong GitHub accounts.

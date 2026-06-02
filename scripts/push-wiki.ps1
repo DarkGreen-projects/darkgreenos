@@ -50,6 +50,10 @@ if (-not $status) {
     exit 0
 }
 
+$env:GIT_AUTHOR_NAME = "DarkGreen-projects"
+$env:GIT_AUTHOR_EMAIL = "57951127+DarkGreen-projects@users.noreply.github.com"
+$env:GIT_COMMITTER_NAME = "DarkGreen-projects"
+$env:GIT_COMMITTER_EMAIL = "57951127+DarkGreen-projects@users.noreply.github.com"
 git commit -m $Message
 git push origin master 2>&1
 if ($LASTEXITCODE -ne 0) {
