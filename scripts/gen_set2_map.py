@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+t = [0] * 128
+m = {
+    "q": 0x15, "w": 0x1D, "e": 0x24, "r": 0x2D, "t": 0x2C, "y": 0x35,
+    "u": 0x3C, "i": 0x43, "o": 0x44, "p": 0x4D, "a": 0x1C, "s": 0x1F,
+    "d": 0x23, "f": 0x2B, "g": 0x34, "h": 0x33, "j": 0x3B, "k": 0x42,
+    "l": 0x4B, "z": 0x1A, "x": 0x22, "c": 0x21, "v": 0x2A, "b": 0x32,
+    "n": 0x31, "m": 0x3A,
+}
+t[0x29] = ord(" ")
+t[0x5A] = 10
+t[0x66] = 8
+for c, v in m.items():
+    t[v] = ord(c)
+for i in range(0, 128, 16):
+    chunk = ", ".join(str(t[j]) for j in range(i, i + 16))
+    print(f"    db {chunk}")

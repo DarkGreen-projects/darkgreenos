@@ -1,0 +1,8 @@
+build/
+iso/
+.cache/
+__pycache__/
+*.pyc
+
+# LLM weights (>100MB, not in GitHub) — build locally or download separately
+model/darkmind-q4.bin

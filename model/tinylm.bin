@@ -1,0 +1,7 @@
+TINYLM2
+vocab=byte-ascii
+quant=int8-scripted
+decode=greedy
+specialization=darkgreenos-gui-kernel
+intents=identity,model,boot,keyboard,gui,mouse,mem,files,scan
+matching=case-insensitive
