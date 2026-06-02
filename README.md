@@ -6,8 +6,8 @@ Repository: [DarkGreen-projects/darkgreenos](https://github.com/DarkGreen-projec
 
 **Wiki dettagliata** (architettura, ogni modulo/funzione, RMGR, comandi):
 
-- Tab Wiki: https://github.com/DarkGreen-projects/darkgreenos/wiki (dopo la prima pagina creata su GitHub, pubblica con `.\scripts\push-wiki.ps1`)
-- Sorgente in repo: [docs/wiki/](docs/wiki/)
+- **Wiki:** https://github.com/DarkGreen-projects/darkgreenos/wiki (aggiorna con `.\scripts\push-wiki.ps1`)
+- Sorgente: [docs/wiki/](docs/wiki/)
 
 ## Cos'è
 

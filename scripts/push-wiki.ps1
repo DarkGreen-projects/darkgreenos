@@ -29,8 +29,8 @@ if (Test-Path $Tmp) {
 }
 
 $WikiUrl = "https://github.com/DarkGreen-projects/darkgreenos.wiki.git"
-git clone $WikiUrl $Tmp 2>&1
-if ($LASTEXITCODE -ne 0) {
+git clone $WikiUrl $Tmp 2>$null
+if (-not (Test-Path (Join-Path $Tmp ".git"))) {
     Write-Host ""
     Write-Host "Wiki git non ancora creato su GitHub."
     Write-Host "1) Apri: https://github.com/DarkGreen-projects/darkgreenos/wiki"
