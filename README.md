@@ -4,8 +4,10 @@ Sistema operativo **bare-metal** per **i386**, scritto in **NASM**, avviato con 
 
 Repository: [DarkGreen-projects/darkgreenos](https://github.com/DarkGreen-projects/darkgreenos)
 
-**Wiki dettagliata (architettura, ogni modulo/funzione, RMGR, comandi):**  
-https://github.com/DarkGreen-projects/darkgreenos/wiki
+**Wiki dettagliata** (architettura, ogni modulo/funzione, RMGR, comandi):
+
+- Tab Wiki: https://github.com/DarkGreen-projects/darkgreenos/wiki (dopo la prima pagina creata su GitHub, pubblica con `.\scripts\push-wiki.ps1`)
+- Sorgente in repo: [docs/wiki/](docs/wiki/)
 
 ## Cos'è
 

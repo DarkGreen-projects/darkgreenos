@@ -28,7 +28,18 @@ if (Test-Path $Tmp) {
     Remove-Item -Recurse -Force $Tmp
 }
 
-git clone "https://github.com/DarkGreen-projects/darkgreenos.wiki.git" $Tmp
+$WikiUrl = "https://github.com/DarkGreen-projects/darkgreenos.wiki.git"
+git clone $WikiUrl $Tmp 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "Wiki git non ancora creato su GitHub."
+    Write-Host "1) Apri: https://github.com/DarkGreen-projects/darkgreenos/wiki"
+    Write-Host "2) Clicca 'Create the first page' -> salva una riga qualsiasi (es. Home)"
+    Write-Host "3) Riesegui: .\scripts\push-wiki.ps1"
+    Write-Host ""
+    Write-Host "Sorgente wiki gia' in repo: docs/wiki/ (leggibile anche senza tab Wiki)"
+    exit 1
+}
 Copy-Item -Path (Join-Path $WikiSrc "*.md") -Destination $Tmp -Force
 
 Set-Location $Tmp
