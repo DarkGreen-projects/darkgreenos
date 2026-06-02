@@ -4,6 +4,9 @@ Sistema operativo **bare-metal** per **i386**, scritto in **NASM**, avviato con 
 
 Repository: [DarkGreen-projects/darkgreenos](https://github.com/DarkGreen-projects/darkgreenos)
 
+**Wiki dettagliata (architettura, ogni modulo/funzione, RMGR, comandi):**  
+https://github.com/DarkGreen-projects/darkgreenos/wiki
+
 ## Cos'è
 
 **DarkgreenOS** è un OS didattico/sperimentale orientato alla **governance misurabile delle risorse** (RAM, GUI, allocazioni, IRQ), non a clonare Linux.
