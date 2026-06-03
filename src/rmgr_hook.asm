@@ -24,9 +24,11 @@ extern rmgr_ema_dticks_class
 global rmgr_hook_init
 global rmgr_irq_kbd_count
 global rmgr_irq_mouse_count
+global rmgr_irq_timer_count
 global rmgr_hook_enter
 global rmgr_hook_leave
 global rmgr_budget_ok
+global rmgr_irq_budget_ok
 global rmgr_budget_irq
 global rmgr_budget_gui
 global rmgr_budget_scan
@@ -38,12 +40,14 @@ rmgr_hook_active: resd 1
 rmgr_hook_depth:  resd 1
 rmgr_irq_kbd_count: resd 1
 rmgr_irq_mouse_count: resd 1
+rmgr_irq_timer_count: resd 1
 rmgr_budget_irq:  resd 1
 rmgr_budget_gui:  resd 1
 rmgr_budget_scan: resd 1
 rmgr_budget_chat: resd 1
 rmgr_budget_comp: resd 1
 rmgr_budget_pmm:  resd 1
+rmgr_budget_fs:   resd 1
 
 section .text
 rmgr_hook_init:
@@ -52,6 +56,7 @@ rmgr_hook_init:
     mov [rmgr_hook_depth], eax
     mov [rmgr_irq_kbd_count], eax
     mov [rmgr_irq_mouse_count], eax
+    mov [rmgr_irq_timer_count], eax
     mov [rmgr_audit_count], eax
     mov [rmgr_audit_head], eax
     jmp rmgr_hook_init_budgets
@@ -66,6 +71,7 @@ rmgr_hook_init_budgets:
     mov dword [rmgr_budget_chat], RMGR_BUDGET_CHAT
     mov dword [rmgr_budget_comp], RMGR_BUDGET_COMP
     mov dword [rmgr_budget_pmm], RMGR_BUDGET_PMM
+    mov dword [rmgr_budget_fs], RMGR_BUDGET_FS
     ret
 
 ; rmgr_budget_ok(eax=action) -> al=1 allow, 0 deny
@@ -99,6 +105,8 @@ rmgr_budget_ok:
     je .allow_irq
     cmp ebx, RMGR_ACT_IRQ_MOUSE
     je .allow_irq
+    cmp ebx, RMGR_ACT_IRQ_TIMER
+    je .allow_irq
     cmp ebx, RMGR_ACT_GUI_REDRAW
     je .gui_b
     cmp ebx, RMGR_ACT_GUI_LOG
@@ -113,10 +121,24 @@ rmgr_budget_ok:
     je .pmm_b
     cmp ebx, RMGR_ACT_PMM_FREE
     je .pmm_b
+    cmp ebx, RMGR_ACT_SYSCALL
+    je .comp_b
+    cmp ebx, RMGR_ACTION_USER_QUERY
+    je .ok_al
+    cmp ebx, RMGR_ACT_GUI_LOG
+    je .ok_al
     cmp ebx, RMGR_ACT_PAGE_FAULT
-    je .ok_al
+    je .allow
     cmp ebx, RMGR_ACT_GPF
-    je .ok_al
+    je .allow
+    cmp ebx, RMGR_ACT_TASK_SWITCH
+    je .allow
+    cmp ebx, RMGR_ACT_FS_READ
+    je .comp_b
+    cmp ebx, RMGR_ACT_FS_WRITE
+    je .comp_b
+    cmp ebx, RMGR_ACT_ERR_LOG
+    je .allow
     mov al, 1
     jmp .out
 .gui_b:
@@ -168,11 +190,33 @@ rmgr_budget_ok:
     pop ebx
     ret
 
+; rmgr_irq_budget_ok() -> al=1 allow IRQ processing under RAM pressure
+rmgr_irq_budget_ok:
+    push ebx
+    mov eax, [pmm_free_kb]
+    mov ebx, [rmgr_free_min_kb_eff]
+    shr ebx, 1
+    cmp eax, ebx
+    jae .ok
+    mov eax, [rmgr_irq_mouse_count]
+    cmp eax, 32
+    ja .deny
+.ok:
+    mov al, 1
+    jmp .irq_out
+.deny:
+    xor al, al
+.irq_out:
+    pop ebx
+    ret
+
 ; eax=action -> eax=class 0..4 for EMA budget
 rmgr_action_class_idx:
     cmp eax, RMGR_ACT_IRQ_KEYBOARD
     je .idle
     cmp eax, RMGR_ACT_IRQ_MOUSE
+    je .idle
+    cmp eax, RMGR_ACT_IRQ_TIMER
     je .idle
     cmp eax, RMGR_ACT_GUI_REDRAW
     je .gui

@@ -19,6 +19,7 @@ extern brain_step
 extern rmgr_periodic_tick
 extern rmgr_irq_kbd_count
 extern rmgr_irq_mouse_count
+extern rmgr_irq_timer_count
 extern pmm_init
 extern pmm_alloc_init
 extern sysres_init
@@ -43,6 +44,14 @@ extern keyboard_poll
 extern keyboard_scancode
 extern pit_init
 extern irq_vector
+extern scheduler_init
+extern scheduler_preempt_check
+extern scheduler_timer_tick
+extern task0_main
+extern syscall_init
+extern fs_init
+extern sched_current
+extern rmgr_irq_budget_ok
 extern fb_active
 
 global kernel_main
@@ -52,7 +61,7 @@ global print_hex32
 
 section .data
 banner:     db "========================================", 0
-title:      db "  DarkgreenOS v0.5 + DarkMind GUI", 0
+title:      db "  DarkgreenOS v0.10 + DarkMind GUI", 0
 subtitle:   db "  Linear FB | mouse | local mind sees resources", 0
 paging_ok:  db "  [paging] identity 4 GiB VA | QEMU -m 2048", 0
 ready:      db "  GUI desktop + serial Companion (HELP/GUI/THINK)", 0
@@ -109,6 +118,9 @@ kernel_main:
     call gui_init
     call brain_init
     call companion_init
+    call fs_init
+    call scheduler_init
+    call syscall_init
 
     cmp dword [fb_active], 0
     je .text_ui
@@ -132,26 +144,7 @@ kernel_main:
 .shell:
     cmp dword [fb_active], 0
     je .text_shell
-.gui_loop:
-    call ps2_poll
-    call keyboard_poll
-    test al, al
-    jz .gui_no_key
-    mov bl, al
-    mov al, bl
-    call gui_handle_key
-    call gui_poll
-    call companion_poll
-    call brain_step
-    hlt
-    jmp .gui_loop
-
-.gui_no_key:
-    call gui_poll
-    call companion_poll
-    call brain_step
-    hlt
-    jmp .gui_loop
+    jmp task0_main
 
 .text_shell:
     mov al, COLOR_DARKGREEN
@@ -231,15 +224,31 @@ isr_handler:
     push ebx
     push edx
     call general_protection_handler
+    add esp, 12
+    test al, al
+    jnz .done
+    cli
+.gp_halt:
+    hlt
+    jmp .gp_halt
 
 .page_fault:
-    push edx
+    push dword [esp + 8]
     call page_fault_handler
+    add esp, 4
+    test al, al
+    jnz .done
+    cli
+.pf_halt:
+    hlt
+    jmp .pf_halt
 
 .timer:
     push eax
     push edx
     inc dword [timer_ticks]
+    inc dword [rmgr_irq_timer_count]
+    call scheduler_timer_tick
     mov eax, [timer_ticks]
     xor edx, edx
     mov ecx, RMGR_PERIODIC_INTERVAL
@@ -259,13 +268,20 @@ isr_handler:
     test al, 1
     jz .done
     test al, MOUSE_STATUS_AUX
-    jnz .done
+    jnz .kbd_irq_aux
     in al, MOUSE_PORT_DATA
     call keyboard_scancode
+    jmp .kbd_irq_drain
+.kbd_irq_aux:
+    in al, MOUSE_PORT_DATA
+    call mouse_scancode
     jmp .kbd_irq_drain
 
 .mouse:
     inc dword [rmgr_irq_mouse_count]
+    call rmgr_irq_budget_ok
+    test al, al
+    jz .mouse_drain
     in al, MOUSE_PORT_STATUS
     test al, 1
     jz .done
@@ -274,6 +290,12 @@ isr_handler:
     in al, MOUSE_PORT_DATA
     call mouse_scancode
     jmp .done
+.mouse_drain:
+    in al, MOUSE_PORT_STATUS
+    test al, 1
+    jz .done
+    in al, MOUSE_PORT_DATA
+    jmp .mouse_drain
 
 .done:
     cmp dword [irq_vector], INT_IRQ0

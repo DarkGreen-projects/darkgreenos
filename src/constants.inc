@@ -171,6 +171,69 @@
 %define RMGR_ACT_PAGE_FAULT       12
 %define RMGR_ACT_GPF              13
 %define RMGR_ACT_PMM_FREE         14
+%define RMGR_ACT_SYSCALL          15
+%define RMGR_ACT_TASK_SWITCH      16
+%define RMGR_ACT_FS_READ          17
+%define RMGR_ACT_FS_WRITE         18
+%define RMGR_ACT_ERR_LOG          19
+
+%define DGFS_HDR_FLAGS            20
+
+%define ERR_NONE                  0
+%define ERR_PF_USER               1
+%define ERR_PF_KERNEL             2
+%define ERR_GPF_USER              3
+%define ERR_GPF_KERNEL            4
+%define ERR_SYSCALL_DENY          5
+%define ERR_BAD_PTR               6
+%define ERR_INVALID_OP            7
+
+%define ERR_RING_ENTRIES          16
+%define ERR_ENTRY_BYTES           16
+
+%define USER_VA_BASE              0x08000000
+%define USER_VA_SIZE              0x04000000
+%define USER_STACK_TOP            0x0BFFFF000
+%define SCH_BG_PRIO_THRESH        128
+
+%define DGFS_HEADER_BYTES         32
+%define DGFS_ENTRY_BYTES          44
+%define DGFS_BLOCK_SIZE           512
+%define DGFS_MAX_SIZE             131072
+%define DGFS_FLAG_READONLY        1
+%define DGFS_FLAG_DIRTY           2
+%define DGFS_AUDIT_TAIL_BYTES     512
+%define DGFS_AUDIT_TAIL_HEAD      0
+%define DGFS_AUDIT_TAIL_DATA      4
+%define DGFS_AUDIT_TAIL_ROOM      508
+
+%define RMGR_BUDGET_FS            300
+
+%define GDT_USER_CODE_SEG         0x18
+%define GDT_USER_DATA_SEG         0x20
+%define GDT_TSS_SEG               0x28
+
+%define INT_SYSCALL               0x80
+
+%define SYS_EXIT                  1
+%define SYS_YIELD                 2
+%define SYS_WRITE                 3
+%define SYS_READ                  4
+%define SYS_OPEN                  5
+%define SYS_ALLOC                 6
+%define SYS_FREE                  7
+
+%define SCH_MAX_TASKS             4
+%define SCH_STACK_SIZE            4096
+%define SCH_STATE_DEAD            0
+%define SCH_STATE_READY           1
+%define SCH_STATE_RUNNING         2
+
+%define FS_MAX_FILES              4
+%define FS_NAME_MAX               32
+%define FS_MAX_OPEN               4
+
+%define DGFS_MAGIC                0x53464744
 
 %define RMGR_REASON_OK            0
 %define RMGR_REASON_BUDGET_DENY   1

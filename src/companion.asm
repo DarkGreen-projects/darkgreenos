@@ -45,9 +45,26 @@ extern rmgr_audit_count
 extern rmgr_hook_enter
 extern rmgr_hook_leave
 extern rmgr_format_snapshot
+extern rmgr_format_status
+extern rmgr_status_buf
 extern pmm_alloc_kb
 extern pmm_free_all
+extern pmm_free_ptr
 extern pmm_alloc_used_kb
+extern fs_open
+extern fs_read
+extern fs_close
+extern scheduler_yield
+extern task_spawn_user
+extern fs_sync
+extern fs_save_profile
+extern fs_deferred_profile_load
+extern rmgr_profile_blob
+extern err_ring_format
+extern err_ring_clear
+extern rmgr_budget_gui
+extern scheduler_format_status
+extern sched_current
 extern print_hex32
 extern vga_putchar
 
@@ -67,7 +84,7 @@ companion_persona:
     times COMPANION_PERSONA_MAX - 54 db 0
 
 msg_boot:       db "[DarkMind] internal LLM core - full OS read access", 0
-msg_help:       db "SNAPSHOT STATS POLICY PROFILE AUDIT ALLOC FREE THINK MAP SCAN ...", 0
+msg_help:       db "SNAPSHOT STATS POLICY PROFILE AUDIT ALLOC FREE TASKS YIELD CAT THINK ...", 0
 msg_ok:         db "OK", 0
 msg_err:        db "ERR unknown command", 0
 msg_pong:       db "PONG DarkgreenOS", 0
@@ -80,6 +97,9 @@ label_ticks:    db "ticks=", 0
 section .bss
 serial_cmd_buf:     resb COMPANION_CMD_MAX
 serial_cmd_len:     resd 1
+sched_status_buf:   resb 64
+cat_read_buf:       resb 128
+err_line_buf:       resb 64
 
 section .rodata
 kw_help:    db "help", 0
@@ -111,6 +131,14 @@ kw_llm:     db "llm", 0
 kw_audit:   db "audit", 0
 kw_alloc:   db "alloc", 0
 kw_free:    db "free", 0
+kw_tasks:   db "tasks", 0
+kw_yield:   db "yield", 0
+kw_run:     db "run", 0
+kw_sync:    db "sync", 0
+kw_errors:  db "errors", 0
+kw_errclr:  db "errors clear", 0
+kw_pset:    db "policy set ", 0
+kw_cat:     db "cat", 0
 kw_snapshot: db "snapshot", 0
 kw_hello:   db "hello", 0
 kw_ciao:    db "ciao", 0
@@ -126,15 +154,24 @@ companion_init:
     mov esi, msg_boot
     call vga_print_ln
     call serial_writeln
+.drain:
+    call serial_rx_ready
+    test al, al
+    jz .drained
+    call serial_rx
+    jmp .drain
+.drained:
+    mov dword [serial_cmd_len], 0
     ret
 
 companion_poll:
+    call fs_deferred_profile_load
     call serial_rx_ready
     test al, al
     jz .ret
     call serial_rx
     cmp al, 13
-    je .exec
+    je .ret
     cmp al, 10
     je .exec
     mov ecx, [serial_cmd_len]
@@ -146,7 +183,17 @@ companion_poll:
     ret
 .exec:
     mov ecx, [serial_cmd_len]
+    test ecx, ecx
+    jz .ret
+    ; strip trailing CR (TCP often sends CRLF)
+.strip_cr:
+    dec ecx
+    js .ret
+    cmp byte [serial_cmd_buf + ecx], 13
+    je .strip_cr
+    inc ecx
     mov byte [serial_cmd_buf + ecx], 0
+    mov [serial_cmd_len], ecx
     mov esi, serial_cmd_buf
     call companion_exec_line
     mov dword [serial_cmd_len], 0
@@ -156,6 +203,9 @@ companion_poll:
 companion_exec_line:
     push esi
     call cmd_ping
+    test al, al
+    jnz .done
+    call cmd_cat
     test al, al
     jnz .done
     call cmd_help
@@ -237,6 +287,27 @@ companion_exec_line:
     test al, al
     jnz .done
     call cmd_pmm_free
+    test al, al
+    jnz .done
+    call cmd_tasks
+    test al, al
+    jnz .done
+    call cmd_yield
+    test al, al
+    jnz .done
+    call cmd_run
+    test al, al
+    jnz .done
+    call cmd_sync
+    test al, al
+    jnz .done
+    call cmd_errors_clear
+    test al, al
+    jnz .done
+    call cmd_errors
+    test al, al
+    jnz .done
+    call cmd_policy_set
     test al, al
     jnz .done
     call cmd_think
@@ -429,6 +500,7 @@ hex_nibble:
 
 cmd_ping:
     push esi
+    mov esi, serial_cmd_buf
     mov edi, kw_ping
     call streq_prefix
     test al, al
@@ -445,6 +517,7 @@ cmd_ping:
 
 cmd_help:
     push esi
+    mov esi, serial_cmd_buf
     mov edi, kw_help
     call streq_prefix
     test al, al
@@ -926,6 +999,7 @@ lbl_policy_dtick: db " dTicks=", 0
 
 cmd_profile:
     push esi
+    mov esi, serial_cmd_buf
     mov edi, kw_profile
     call streq_prefix
     test al, al
@@ -951,7 +1025,9 @@ cmd_profile:
     mov eax, [rmgr_free_min_kb_eff]
     call print_dec
     call vga_print_ln
-    call companion_reply_ok
+    call rmgr_format_status
+    mov esi, rmgr_status_buf
+    call companion_reply
     mov al, 1
     jmp .out
 .export:
@@ -1109,6 +1185,215 @@ cmd_pmm_free:
 msg_alloc_ok:  db "alloc OK (vedi audit/profile per dFree_kb)", 0
 msg_alloc_fail: db "alloc negata (budget/RAM/arena)", 0
 msg_free_ok:   db "arena PMM liberata", 0
+msg_tasks:     db "tasks: ", 0
+msg_cat_fail:  db "cat: file not found", 0
+
+cmd_tasks:
+    push esi
+    mov edi, kw_tasks
+    call streq_prefix
+    test al, al
+    jz .no
+    mov esi, msg_tasks
+    call companion_reply
+    mov esi, sched_status_buf
+    call scheduler_format_status
+    mov esi, sched_status_buf
+    call serial_writeln
+    mov al, 1
+    jmp .out
+.no:
+    xor al, al
+.out:
+    pop esi
+    ret
+
+cmd_yield:
+    push esi
+    mov edi, kw_yield
+    call streq_prefix
+    test al, al
+    jz .no
+    call scheduler_yield
+    mov esi, msg_ok
+    call companion_reply
+    mov al, 1
+    jmp .out
+.no:
+    xor al, al
+.out:
+    pop esi
+    ret
+
+cmd_run:
+    push esi
+    mov edi, kw_run
+    call streq_prefix
+    test al, al
+    jz .no
+    call task_spawn_user
+    cmp eax, -1
+    je .fail
+    call scheduler_yield
+    mov esi, msg_ok
+    call companion_reply
+    mov al, 1
+    jmp .out
+.fail:
+    mov esi, msg_err
+    call companion_reply
+    mov al, 1
+    jmp .out
+.no:
+    xor al, al
+.out:
+    pop esi
+    ret
+
+cmd_sync:
+    push esi
+    mov esi, serial_cmd_buf
+    mov edi, kw_sync
+    call streq_prefix
+    test al, al
+    jz .no
+    call fs_sync
+    mov esi, msg_ok
+    call companion_reply
+    mov al, 1
+    jmp .out
+.no:
+    xor al, al
+.out:
+    pop esi
+    ret
+
+cmd_errors_clear:
+    push esi
+    mov edi, kw_errclr
+    call streq_prefix
+    test al, al
+    jz .no
+    call err_ring_clear
+    mov esi, msg_ok
+    call companion_reply
+    mov al, 1
+    jmp .out
+.no:
+    xor al, al
+.out:
+    pop esi
+    ret
+
+cmd_errors:
+    push esi
+    mov edi, kw_errors
+    call streq_prefix
+    test al, al
+    jz .no
+    mov esi, err_line_buf
+    call err_ring_format
+    call companion_reply
+    mov al, 1
+    jmp .out
+.no:
+    xor al, al
+.out:
+    pop esi
+    ret
+
+cmd_policy_set:
+    push esi
+    push ebx
+    mov esi, serial_cmd_buf
+    mov edi, kw_pset
+    call streq_prefix
+    test al, al
+    jz .no
+    mov edi, kw_thr
+    call streq_prefix
+    test al, al
+    jnz .set_thr
+    mov edi, kw_bgui
+    call streq_prefix
+    test al, al
+    jnz .set_gui
+    jmp .no
+.set_thr:
+    call parse_dec
+    cmp eax, RMGR_THROTTLE_MAX
+    ja .no
+    cmp eax, RMGR_THROTTLE_MIN
+    jb .no
+    mov [rmgr_throttle_base], eax
+    mov [rmgr_throttle_div], eax
+    mov [rmgr_profile_blob + RMGR_PROF_THROTTLE], eax
+    call fs_save_profile
+    mov esi, msg_ok
+    call companion_reply
+    mov al, 1
+    jmp .out
+.set_gui:
+    call parse_dec
+    test eax, eax
+    jz .no
+    mov [rmgr_budget_gui], eax
+    mov esi, msg_ok
+    call companion_reply
+    mov al, 1
+    jmp .out
+.no:
+    xor al, al
+.out:
+    pop ebx
+    pop esi
+    ret
+
+kw_thr:  db "thr=", 0
+kw_bgui: db "budget_gui=", 0
+
+cmd_cat:
+    push esi
+    push ebx
+    mov esi, serial_cmd_buf
+    mov edi, kw_cat
+    call streq_prefix
+    test al, al
+    jz .no
+    call skip_spaces
+    test byte [esi], 0
+    jz .no
+    call fs_open
+    cmp eax, -1
+    je .fail
+    mov ebx, eax
+    mov eax, ebx
+    mov ecx, 127
+    push ebx
+    mov ebx, cat_read_buf
+    call fs_read
+    pop ebx
+    test eax, eax
+    js .fail_close
+    mov byte [cat_read_buf + eax], 0
+    mov esi, cat_read_buf
+    call companion_reply
+.fail_close:
+    mov eax, ebx
+    call fs_close
+    mov al, 1
+    jmp .out
+.fail:
+    mov esi, msg_cat_fail
+    call companion_reply
+    mov al, 1
+    jmp .out
+.no:
+    xor al, al
+.out:
+    pop ebx
+    pop esi
+    ret
 
 ; parse_dec: esi -> eax number, esi advanced
 parse_dec:
@@ -1135,6 +1420,7 @@ parse_dec:
 
 cmd_think:
     push esi
+    mov esi, serial_cmd_buf
     mov edi, kw_think
     call streq_prefix
     test al, al

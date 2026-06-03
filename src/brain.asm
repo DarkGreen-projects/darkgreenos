@@ -32,10 +32,12 @@ extern kernel_end
 extern tinylm_start
 extern tinylm_step
 extern rmgr_boot_init
+extern darkmind_busy
 
 global brain_init
 global brain_refresh
 global brain_think
+global brain_queue_think
 global brain_step
 global brain_ctx
 
@@ -47,6 +49,8 @@ brain_ctx:
 global brain_mood
 brain_mood: resd 1
 brain_query_ptr: resd 1
+brain_pending:   resd 1
+brain_pending_query: resb DARKMIND_QUERY_MAX
 hidden:     resd 4
 inp:        resd 4
 
@@ -102,6 +106,7 @@ reply_default:  db "Orchestratore risorse attivo: scrivi mem, scan o una domanda
 section .text
 brain_init:
     call rmgr_boot_init
+    mov dword [brain_pending], 0
     mov esi, lbl_brain_on
     call gui_log_line
     call brain_refresh
@@ -149,17 +154,48 @@ brain_refresh:
     popa
     ret
 
-; brain_think(esi=query) - uses full OS visibility
+; brain_queue_think(esi=query) — non bloccante, eseguito al prossimo brain_step
+brain_queue_think:
+    push esi
+    push edi
+    push ecx
+    mov edi, brain_pending_query
+    mov ecx, DARKMIND_QUERY_MAX - 1
+.copy:
+    test ecx, ecx
+    jz .done
+    lodsb
+    test al, al
+    jz .done
+    mov [edi], al
+    inc edi
+    dec ecx
+    jmp .copy
+.done:
+    mov byte [edi], 0
+    mov dword [brain_pending], 1
+    pop ecx
+    pop edi
+    pop esi
+    ret
+
+; brain_think(esi=query) - avvia DarkMind (leggero, senza doppio scan)
 brain_think:
-    pusha
-    mov [brain_query_ptr], esi
-    call brain_refresh
-    mov esi, [brain_query_ptr]
+    push esi
+    call sysres_sync_mouse
+    pop esi
     call tinylm_start
-    popa
     ret
 
 brain_step:
+    cmp dword [brain_pending], 0
+    je .step
+    mov dword [brain_pending], 0
+    push esi
+    mov esi, brain_pending_query
+    call brain_think
+    pop esi
+.step:
     call tinylm_step
     ret
 

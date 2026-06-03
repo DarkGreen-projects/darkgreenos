@@ -42,6 +42,10 @@ Commands:
   THINK <user message>   (local kernel brain)
   TICKS
   CLEAR
+  tasks | yield | run | sync
+  policy set thr=<1-16>
+  policy set budget_gui=<n>
+  cat <file>
 Examples:
   user: make screen green -> COLOR 0A
   user: call yourself Nova -> NAME Nova
@@ -49,6 +53,70 @@ Examples:
 """
 
 RMGR_HINTS = ("lento", "slow", "rallenta", "rmgr", "audit", "memoria", "ram", "perche")
+WEB_HINTS = ("cerca", "search", "web", "internet", "google")
+
+
+def web_search(query: str, max_chars: int = 400) -> str:
+    """Lightweight web snippet (no extra deps)."""
+    try:
+        import urllib.parse
+        import urllib.request
+
+        q = urllib.parse.quote(query)
+        url = f"https://api.duckduckgo.com/?q={q}&format=json&no_html=1"
+        req = urllib.request.Request(url, headers={"User-Agent": "DarkgreenOS-companion/0.10"})
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            import json
+
+            data = json.loads(resp.read().decode())
+        abstract = (data.get("AbstractText") or "").strip()
+        if abstract:
+            return abstract[:max_chars]
+        topics = data.get("RelatedTopics") or []
+        for item in topics[:3]:
+            if isinstance(item, dict) and item.get("Text"):
+                return str(item["Text"])[:max_chars]
+    except Exception as e:
+        return f"(web unavailable: {e})"
+    return "(no web result)"
+
+
+def auto_policy_tune(link: "SerialLink", snapshot: dict[str, str]) -> None:
+    """Apply POLICY_SET from SNAP metrics when RAM/CPU pressure is high."""
+    free_s = snapshot.get("free", "")
+    dt_s = snapshot.get("dT", "")
+    try:
+        free_kb = int(free_s)
+    except ValueError:
+        return
+    try:
+        dt = int(dt_s)
+    except ValueError:
+        dt = 0
+    thr = 8
+    if free_kb < 32768 or dt > 500:
+        thr = 2
+    elif free_kb < 65536 or dt > 300:
+        thr = 4
+    elif dt < 80:
+        thr = 12
+    link.transact(f"policy set thr={thr}")
+    if free_kb < 49152:
+        link.transact("policy set budget_gui=200")
+    print(f"[agent] auto-tune thr={thr} (free={free_kb} dT={dt})")
+
+
+def say_stream(link: "SerialLink", text: str, chunk: int = 48) -> None:
+    """Split long replies into multiple SAY lines for lower perceived lag."""
+    text = text.strip()
+    if not text:
+        return
+    if len(text) <= chunk:
+        link.transact(f"SAY {text}")
+        return
+    for i in range(0, len(text), chunk):
+        part = text[i : i + chunk]
+        link.transact(f"SAY {part}", wait=0.25)
 
 
 def parse_snapshot_line(line: str) -> dict[str, str] | None:
@@ -73,6 +141,16 @@ def rule_based_translate(text: str) -> str:
         return "HELP"
     if t in ("help", "?", "aiuto"):
         return "HELP"
+    if t in ("tasks", "yield", "run", "sync"):
+        return t if t == "run" else t
+    if t.startswith("policy set "):
+        return text.strip()
+    if t.startswith("cat "):
+        return text.strip()
+    if t.startswith("web ") or t.startswith("/web "):
+        q = text.split(maxsplit=1)[-1].strip()
+        snippet = web_search(q)
+        return f"SAY Web: {snippet[:200]}"
     if t in ("ping", "test"):
         return "PING"
     if t in ("status", "stato"):
@@ -251,10 +329,18 @@ def main() -> None:
     parser.add_argument("--host", default=SERIAL_HOST)
     parser.add_argument("--port", type=int, default=SERIAL_PORT)
     parser.add_argument("--no-llm", action="store_true", help="Force rule-based mode")
+    parser.add_argument(
+        "--auto-tune",
+        type=int,
+        default=0,
+        metavar="SEC",
+        help="Every N seconds fetch SNAP and auto POLICY_SET",
+    )
     args = parser.parse_args()
 
     link = SerialLink(args.host, args.port)
     translate = rule_based_translate if args.no_llm else llm_translate
+    last_tune = 0.0
 
     try:
         while True:
@@ -266,14 +352,30 @@ def main() -> None:
                 continue
             if user in ("/quit", "exit"):
                 break
+            if args.auto_tune and (time.time() - last_tune) >= args.auto_tune:
+                snapshot, _ = link.fetch_rmgr_context()
+                if snapshot:
+                    auto_policy_tune(link, snapshot)
+                last_tune = time.time()
+            tlow = user.lower()
+            if tlow.startswith("/web ") or tlow.startswith("web "):
+                q = user.split(maxsplit=1)[-1]
+                snippet = web_search(q)
+                say_stream(link, f"Web: {snippet}")
+                continue
+            if any(h in tlow for h in WEB_HINTS) and ("cerca" in tlow or "search" in tlow):
+                q = re.sub(r".*(?:cerca|search)\s+", "", tlow, flags=re.I).strip() or user
+                say_stream(link, f"Web: {web_search(q)[:220]}")
+                continue
             if wants_rmgr_context(user):
                 snapshot, audit = link.fetch_rmgr_context()
                 print(f"rmgr> {snapshot}")
                 advice = llm_rmgr_advice(user, snapshot, audit)
                 if advice.upper().startswith("SAY "):
-                    link.send_line(advice)
+                    say_stream(link, advice[4:].strip())
                 else:
                     print(f"advice> {advice}")
+                    say_stream(link, advice)
                 try:
                     reply = link.recv_line()
                     if reply:
@@ -283,6 +385,9 @@ def main() -> None:
                 continue
             cmd = translate(user)
             print(f"cmd> {cmd}")
+            if cmd.upper().startswith("SAY "):
+                say_stream(link, cmd[4:].strip())
+                continue
             lines = link.transact(cmd)
             for line in lines:
                 print(f"os>  {line}")

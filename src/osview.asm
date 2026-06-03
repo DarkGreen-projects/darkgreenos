@@ -62,8 +62,11 @@ extern mb_ram_total_kb
 
 extern rmgr_hook_enter
 extern rmgr_hook_leave
+extern rmgr_predict_eval
 
 osview_scan_stats:
+    mov eax, RMGR_CLASS_MEM_SCAN
+    call rmgr_predict_eval
     mov eax, RMGR_ACT_OSVIEW_SCAN
     call rmgr_hook_enter
     test al, al

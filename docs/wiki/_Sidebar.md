@@ -3,6 +3,7 @@
 **[Home](Home)**
 
 - [Architettura](Architettura-generale)
+- [Classico vs Orchestrator-Native](Kernel-classico-vs-Orchestrator-Native)
 - [Avvio e kernel](Avvio-Multiboot-e-kernel)
 - [RMGR](RMGR-orchestratore)
 - [Hook e audit](RMGR-hook-audit-budget)

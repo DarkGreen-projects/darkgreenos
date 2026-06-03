@@ -7,6 +7,7 @@ Documentazione tecnica del kernel bare-metal **DarkgreenOS** e dell’orchestrat
 | Pagina | Contenuto |
 |--------|-----------|
 | [Architettura generale](Architettura-generale) | Stack, obiettivi, cosa non è Linux |
+| [Classico vs Orchestrator-Native](Kernel-classico-vs-Orchestrator-Native) | Confronto kernel classico, visione RMGR |
 | [Avvio, Multiboot e kernel](Avvio-Multiboot-e-kernel) | Boot, GDT/IDT, IRQ, `kernel_main` |
 | [RMGR — orchestratore risorse](RMGR-orchestratore) | Policy, snapshot, decisioni, profilo |
 | [RMGR hook, audit e budget](RMGR-hook-audit-budget) | `enter`/`leave`, deny, ring audit |
@@ -27,4 +28,4 @@ Documentazione tecnica del kernel bare-metal **DarkgreenOS** e dell’orchestrat
 
 ## Versione
 
-DarkgreenOS **v0.5** — Fase A instrumentazione RMGR completata; Fase B (syscall/scheduler) non ancora in kernel.
+DarkgreenOS **v0.10** — Kernel core: DGFS RW, err ring, SYS_ALLOC user VA, rmgr_predict su GUI/scan/chat, benchmark CI.

@@ -16,7 +16,8 @@
 %define GUI_AI_LINE_Y            (GUI_AI_TOP + 26)
 %define GUI_INPUT_X              320
 %define FB_COL_BLACK             0x00000000
-%define FB_COL_INPUT             0x00D8FFD8
+%define FB_COL_INPUT             0x00FFFFFF
+%define FB_COL_INPUT_TEXT        0x00000000
 
 extern fb_active
 extern fb_width
@@ -25,6 +26,7 @@ extern fb_clear
 extern fb_fill_rect
 extern gfx_draw_string_at
 extern gfx_draw_char
+extern gfx_is_printable_char
 extern fb_put_pixel
 extern fb_xor_pixel
 extern mouse_x
@@ -34,7 +36,8 @@ extern mouse_wheel_delta
 extern sysres_sync_mouse
 extern sysres_gui_on
 extern brain_ctx
-extern brain_think
+extern brain_queue_think
+extern darkmind_busy
 extern companion_name
 extern timer_ticks
 extern tinylm_busy
@@ -44,6 +47,7 @@ extern rmgr_skip_redraw
 extern rmgr_refresh
 extern rmgr_format_status
 extern rmgr_hook_enter
+extern rmgr_predict_eval
 extern rmgr_hook_leave
 extern rmgr_skip_redraw
 extern rmgr_audit_count
@@ -106,8 +110,11 @@ global gui_poll
 global gui_redraw
 global gui_log_line
 global gui_show_resources
+global gui_ai_redraw
+global gui_ai_draw_last
 global gui_handle_key
 global gui_panel_refresh
+global gui_draw_resource_panel
 
 gui_init:
     cmp dword [fb_active], 0
@@ -160,6 +167,8 @@ gui_redraw:
     mov dword [gui_dirty], 1
     ret
 .go_redraw:
+    mov eax, RMGR_CLASS_GUI_PAINT
+    call rmgr_predict_eval
     mov eax, RMGR_ACT_GUI_REDRAW
     call rmgr_hook_enter
     test al, al
@@ -212,7 +221,7 @@ gui_redraw:
 
 gui_panel_refresh:
     call rmgr_refresh
-    mov dword [gui_dirty], 1
+    call gui_draw_resource_panel
     ret
 
 gui_draw_resource_panel:
@@ -269,7 +278,7 @@ gui_draw_input_bar:
     call fb_fill_rect
     add esp, 20
 
-    push FB_COL_TEXT
+    push FB_COL_INPUT_TEXT
     push 10
     mov eax, GUI_INPUT_X
     add eax, 8
@@ -278,7 +287,7 @@ gui_draw_input_bar:
     call gfx_draw_string_at
     add esp, 16
 
-    push FB_COL_TEXT
+    push FB_COL_INPUT_TEXT
     push 10
     mov eax, GUI_INPUT_X
     add eax, 24
@@ -291,7 +300,7 @@ gui_draw_input_bar:
     je .done
     cmp dword [gui_caret_phase], 0
     je .done
-    push FB_COL_BLACK
+    push FB_COL_INPUT_TEXT
     push 12
     push 2
     push 8
@@ -416,10 +425,11 @@ gui_format_kbd_dbg:
     mov [edi], al
     add edi, 4
     movzx eax, byte [keyboard_last_char]
-    cmp al, 32
-    jb .ch_dot
-    cmp al, 126
-    ja .ch_dot
+    push eax
+    call gfx_is_printable_char
+    test al, al
+    pop eax
+    jz .ch_dot
     mov [edi], al
     jmp .ch_cnt
 .ch_dot:
@@ -515,6 +525,83 @@ gui_show_resources:
     pop eax
     ret
 
+; Ridisegna pannello risposte DarkMind senza passare da rmgr_hook (sempre visibile)
+gui_ai_redraw:
+    push eax
+    push ebx
+    push ecx
+    push edx
+    cmp dword [fb_active], 0
+    je .out
+    push FB_COL_INPUT
+    mov eax, [fb_height]
+    sub eax, GUI_STATUS_H
+    sub eax, GUI_AI_TOP
+    sub eax, 8
+    push eax
+    mov eax, [fb_width]
+    sub eax, GUI_AI_TEXT_X
+    sub eax, 8
+    push eax
+    push GUI_AI_TOP
+    push GUI_AI_TEXT_X
+    call fb_fill_rect
+    add esp, 20
+    call gui_show_resources
+.out:
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
+    ret
+
+; Disegna solo l'ultima riga AI (no clear dell'intero pannello)
+gui_ai_draw_last:
+    push eax
+    push ebx
+    push ecx
+    push edx
+    push esi
+    cmp dword [fb_active], 0
+    je .out
+    mov eax, [gui_ai_count]
+    test eax, eax
+    jz .out
+    dec eax
+    mov edx, eax
+    mov ecx, eax
+    cmp ecx, GUI_AI_VISIBLE
+    jb .row_ok
+    mov ecx, GUI_AI_VISIBLE - 1
+.row_ok:
+    imul ebx, ecx, 10
+    add ebx, GUI_AI_LINE_Y
+    push FB_COL_INPUT
+    push 10
+    mov eax, [fb_width]
+    sub eax, GUI_AI_TEXT_X
+    sub eax, 8
+    push eax
+    push ebx
+    push GUI_AI_TEXT_X
+    call fb_fill_rect
+    add esp, 20
+    imul eax, edx, GUI_AI_COLS + 1
+    lea esi, [gui_ai_lines + eax]
+    push FB_COL_BLACK
+    push ebx
+    push GUI_AI_TEXT_X
+    push esi
+    call gfx_draw_string_at
+    add esp, 16
+.out:
+    pop esi
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
+    ret
+
 gui_log_line:
     cmp dword [fb_active], 0
     je .vga
@@ -566,10 +653,14 @@ gui_log_wrapped:
 .filled:
     mov byte [edi], 0
     mov dword [gui_ai_scroll], 0
-    cmp dword [rmgr_skip_redraw], 0
-    jne .no_dirty
-    mov dword [gui_dirty], 1
-.no_dirty:
+    mov eax, [gui_ai_count]
+    cmp eax, GUI_AI_VISIBLE
+    ja .full_ai
+    call gui_ai_draw_last
+    jmp .log_done
+.full_ai:
+    call gui_ai_redraw
+.log_done:
     pop esi
     pop edi
     pop ecx
@@ -593,8 +684,11 @@ gui_handle_key:
     je .tab
     cmp al, 32
     jb .out
-    cmp al, 126
-    ja .out
+    push eax
+    call gfx_is_printable_char
+    test al, al
+    pop eax
+    jz .out
     mov ecx, [gui_input_len]
     cmp ecx, GUI_INPUT_MAX - 1
     jae .out
@@ -605,7 +699,6 @@ gui_handle_key:
     call gui_draw_input_bar
     call gui_cursor_sync
     call gui_format_kbd_dbg
-    mov dword [gui_dirty], 1
     jmp .out
 .backspace:
     mov ecx, [gui_input_len]
@@ -617,7 +710,6 @@ gui_handle_key:
     call gui_draw_input_bar
     call gui_cursor_sync
     call gui_format_kbd_dbg
-    mov dword [gui_dirty], 1
     jmp .out
 .tab:
     mov al, ' '
@@ -631,13 +723,16 @@ gui_handle_key:
     call gui_draw_input_bar
     call gui_cursor_sync
     call gui_format_kbd_dbg
-    mov dword [gui_dirty], 1
     jmp .out
 .enter:
     cmp dword [gui_input_len], 0
     je .out
+    cmp dword [darkmind_busy], 0
+    jne .out
+    cmp dword [tinylm_busy], 0
+    jne .out
     mov esi, gui_input
-    call brain_think
+    call brain_queue_think
     mov dword [gui_input_len], 0
     mov byte [gui_input], 0
     call gui_draw_input_bar
@@ -674,10 +769,14 @@ gui_handle_click:
     ret
 
 gui_update_caret:
+    cmp dword [darkmind_busy], 0
+    jne .out
+    cmp dword [tinylm_busy], 0
+    jne .out
     cmp dword [gui_input_active], 0
     je .inactive
     mov eax, [timer_ticks]
-    shr eax, 4
+    shr eax, 6
     and eax, 1
     cmp eax, [gui_caret_phase]
     je .out
@@ -694,6 +793,7 @@ gui_update_caret:
 
 gui_draw_caret_cell:
     push eax
+    push ebx
     push FB_COL_INPUT
     push 10
     push 8
@@ -705,11 +805,30 @@ gui_draw_caret_cell:
     push eax
     call fb_fill_rect
     add esp, 20
+    mov eax, [gui_input_len]
+    test eax, eax
+    jz .caret
+    dec eax
+    movzx eax, byte [gui_input + eax]
+    push eax
+    call gfx_is_printable_char
+    test al, al
+    pop eax
+    jz .caret
+    mov ebx, [gui_last_caret_x]
+    sub ebx, 8
+    push FB_COL_INPUT_TEXT
+    push eax
+    push 10
+    push ebx
+    call gfx_draw_char
+    add esp, 16
+.caret:
     cmp dword [gui_input_active], 0
     je .done
     cmp dword [gui_caret_phase], 0
     je .done
-    push FB_COL_BLACK
+    push FB_COL_INPUT_TEXT
     push 12
     push 2
     push 8
@@ -717,6 +836,7 @@ gui_draw_caret_cell:
     call fb_fill_rect
     add esp, 20
 .done:
+    pop ebx
     pop eax
     ret
 
@@ -730,17 +850,17 @@ gui_handle_wheel:
 .wheel_up:
     mov ebx, [gui_ai_count]
     sub ebx, GUI_AI_VISIBLE
-    jle .dirty
+    jle .wheel_done
     cmp [gui_ai_scroll], ebx
-    jge .dirty
+    jge .wheel_done
     inc dword [gui_ai_scroll]
-    jmp .dirty
+    jmp .wheel_done
 .wheel_down:
     cmp dword [gui_ai_scroll], 0
-    jle .dirty
+    jle .wheel_done
     dec dword [gui_ai_scroll]
-.dirty:
-    mov dword [gui_dirty], 1
+.wheel_done:
+    call gui_ai_redraw
 .out:
     ret
 

@@ -21,6 +21,9 @@ Pacchetti: `nasm`, `gcc-multilib`, `grub-pc-bin`, `qemu-system-x86`, `python3`.
 | `make run-ai` | TCP 4444 per agent |
 | `make verify-mb2` | Checksum Multiboot2 |
 | `make clean` | Rimuove `build/`, `iso/` |
+| `make regress` | `scripts/qemu_rmgr_regress.py` |
+| `make cross-boot` | Patch DGFS + test profilo thr |
+| `make benchmark` | `scripts/benchmark_rmgr.py` thr=1 vs 16 |
 
 ## GRUB (`grub.cfg`)
 
@@ -35,7 +38,10 @@ Pacchetti: `nasm`, `gcc-multilib`, `grub-pc-bin`, `qemu-system-x86`, `python3`.
 3. **`-m 512`** → `profile`: thr / free_min_kb_eff salgono
 4. **`alloc 64`** → dFree_kb negativo coerente; `free` ripristina
 5. **Mouse** → no raffica caratteri; tastiera in barra chat
-6. **`python3 scripts/qemu_rmgr_regress.py`** (WSL + pyserial)
+6. **`make regress`** — seriale + policy/errors/run/sync
+7. **`make cross-boot`** — `patch_dgfs_profile.py` + profilo thr da DGFS
+8. **CI** — `.github/workflows/ci.yml` (build + size gate)
+9. **`errors`** / **`errors clear`** su COM1
 
 ## Dimensioni attese
 

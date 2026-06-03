@@ -13,6 +13,71 @@ section .text
 global gfx_draw_char
 global gfx_draw_string
 global gfx_draw_string_at
+global gfx_is_printable_char
+
+extern font8_table
+extern font8_it_table
+
+section .text
+; gfx_draw_latin1_it(al=char) -> esi=glyph or 0
+gfx_draw_latin1_it:
+    push ebx
+    xor ebx, ebx
+    cmp al, 0xA3
+    je .found
+    inc ebx
+    cmp al, 0xA7
+    je .found
+    inc ebx
+    cmp al, 0xE0
+    je .found
+    inc ebx
+    cmp al, 0xE8
+    je .found
+    inc ebx
+    cmp al, 0xE9
+    je .found
+    inc ebx
+    cmp al, 0xEC
+    je .found
+    inc ebx
+    cmp al, 0xF2
+    je .found
+    inc ebx
+    cmp al, 0xF9
+    je .found
+    inc ebx
+    cmp al, 0xE7
+    je .found
+    xor esi, esi
+    jmp .out
+.found:
+    shl ebx, 3
+    lea esi, [font8_it_table + ebx]
+.out:
+    pop ebx
+    ret
+
+; gfx_is_printable_char(al) -> al=1 drawable, al=0 not
+gfx_is_printable_char:
+    push ebx
+    push esi
+    cmp al, 32
+    jb .no
+    cmp al, 127
+    jb .yes
+    call gfx_draw_latin1_it
+    test esi, esi
+    jz .no
+.yes:
+    mov al, 1
+    jmp .done
+.no:
+    xor al, al
+.done:
+    pop esi
+    pop ebx
+    ret
 
 ; gfx_draw_char(x, y, char, color)
 gfx_draw_char:
@@ -29,11 +94,17 @@ gfx_draw_char:
     cmp al, 32
     jb .out
     cmp al, 127
-    jae .out
+    jb .ascii
+    call gfx_draw_latin1_it
+    test esi, esi
+    jz .out
+    jmp .draw_glyph
+.ascii:
     sub al, 32
     movzx eax, al
     shl eax, 3
     lea esi, [font8_table + eax]
+.draw_glyph:
     mov edx, [ebp + 12]
     xor ebx, ebx
 .row:

@@ -10,6 +10,7 @@ extern io_wait
 
 section .bss
 align 8
+global idt_start
 idt_start:
     resb 48 * 8
 idt_end:

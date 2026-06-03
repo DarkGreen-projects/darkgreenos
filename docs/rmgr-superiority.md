@@ -20,6 +20,8 @@ DarkgreenOS non compete con Linux su driver/rete/processi. Vince su **governance
 | PMM alloc/free | 11 / 14 |
 | Companion stats/policy/audit/snapshot | 10 |
 | IRQ keyboard/mouse (poll) | 5 / 6 |
+| IRQ timer (PIT) | 4 |
+| Syscall | 15 |
 | Page fault / GPF | 12 / 13 |
 
 ## Test QEMU

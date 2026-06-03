@@ -9,6 +9,7 @@ extern rmgr_reason
 extern rmgr_delta_free_kb
 extern rmgr_delta_ticks
 extern rmgr_profile_blob
+extern fs_audit_tail_push
 
 global rmgr_audit_count
 global rmgr_audit_head
@@ -62,6 +63,7 @@ rmgr_audit_push:
 .head_ok:
     mov [rmgr_audit_head], eax
     inc dword [rmgr_audit_count]
+    call fs_audit_tail_push
     pop edi
     pop ebx
     pop eax

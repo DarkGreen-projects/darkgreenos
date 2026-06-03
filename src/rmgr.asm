@@ -53,6 +53,8 @@ global rmgr_reason
 extern rmgr_audit_push
 extern rmgr_hook_init
 
+extern rmgr_predict_init
+
 section .bss
 align 4
 global rmgr_current
@@ -99,6 +101,7 @@ snap_sep:    db " |", 0
 extern rmgr_audit_count
 extern rmgr_audit_format_line
 extern rmgr_audit_append_top3
+extern fs_audit_tail_snapshot
 
 line_banner:  db "[DarkMind] orchestratore risorse kernel - misura prima/dopo ogni azione.", 0
 line_before:  db "PRIMA: free_kb=", 0
@@ -138,9 +141,14 @@ rmgr_init:
     call rmgr_refresh
     ret
 
+extern rmgr_hook_init
+
+extern rmgr_predict_init
+
 global rmgr_boot_init
 rmgr_boot_init:
     call rmgr_hook_init
+    call rmgr_predict_init
     call rmgr_profile_load
     jmp rmgr_init
 
@@ -538,6 +546,8 @@ rmgr_format_snapshot:
     inc ecx
     jmp .snap_loop
 .snap_done:
+    call rmgr_panel_seek_end
+    call fs_audit_tail_snapshot
     mov esi, rmgr_snapshot_buf
     pop edi
     pop ecx

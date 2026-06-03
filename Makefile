@@ -13,29 +13,42 @@ LDFLAGS   = -m elf_i386 -T linker.ld
 SRC_ASM   = src/boot.asm src/kernel.asm src/gdt.asm src/idt.asm \
             src/io.asm src/vga.asm src/keyboard.asm src/pit.asm \
             src/paging.asm src/pagefault.asm src/gpfault.asm src/invalidop.asm src/serial.asm src/companion.asm \
-            src/multiboot_parse.asm src/mb2_parse.asm src/framebuffer.asm src/font8.asm \
+            src/multiboot_parse.asm src/mb2_parse.asm src/framebuffer.asm src/font8.asm src/font8_it.asm \
             src/gfx.asm src/mouse.asm src/gui.asm src/sysres.asm \
             src/osview.asm src/brain.asm src/tinylm.asm src/pmm.asm \
             src/rmgr.asm src/rmgr_profile.asm src/rmgr_audit.asm src/rmgr_hook.asm \
-            src/darkmind.asm src/dmem.asm src/pmm_alloc.asm src/mem_safe.asm
+            src/darkmind.asm src/dmem.asm src/pmm_alloc.asm src/mem_safe.asm \
+            src/syscall.asm src/scheduler.asm src/user_task.asm \
+            src/fs_min.asm src/fs_dgfs.asm src/rmgr_predict.asm src/err_ring.asm
 OBJ       = $(SRC_ASM:src/%.asm=build/%.o)
 
 KERNEL    = build/darkgreenos.kernel
 ISO       = build/darkgreenos.iso
 MEMORY    = model/darkmind-memory.bin
+DGFS      = model/dgfs.img
 QEMU_MEM  ?= 2048
 QEMU      ?= qemu-system-x86_64
 # Default: no -serial stdio (avoids QEMU iothread mutex abort on long I/O bursts).
 # Use: make run-serial  for COM1 on stdio (companion / profile export).
 # grab-on=hover needs newer QEMU; click inside the GTK window to capture keyboard
-QEMU_OPTS = -cdrom $(ISO) -m $(QEMU_MEM) -display gtk -k it
+QEMU_KBD  ?= -k it
+QEMU_OPTS = -cdrom $(ISO) -m $(QEMU_MEM) -display gtk $(QEMU_KBD)
 
-.PHONY: all clean run iso dirs check-tools verify-mb2
+.PHONY: all clean run iso dirs check-tools verify-mb2 regress cross-boot benchmark
+
+regress: iso
+	python3 scripts/qemu_rmgr_regress.py
+
+cross-boot: iso
+	python3 scripts/qemu_rmgr_regress.py --cross-boot
+
+benchmark: iso
+	python3 scripts/benchmark_rmgr.py
 
 verify-mb2: $(KERNEL)
 	python3 scripts/mb2_checksum.py $(KERNEL)
 
-all: check-tools dirs $(MEMORY) $(KERNEL)
+all: check-tools dirs $(MEMORY) $(DGFS) $(KERNEL)
 
 check-tools:
 	@command -v $(ASM) >/dev/null 2>&1 || ( \
@@ -65,9 +78,13 @@ $(KERNEL): $(OBJ) linker.ld
 $(MEMORY): scripts/build_darkmind_memory.py
 	python3 scripts/build_darkmind_memory.py
 
+$(DGFS): scripts/build_dgfs.py
+	python3 scripts/build_dgfs.py
+
 iso: all
 	cp $(KERNEL) iso/boot/darkgreenos.kernel
 	cp $(MEMORY) iso/boot/memory/darkmind-memory.bin
+	cp $(DGFS) iso/boot/dgfs.img
 	cp grub.cfg iso/boot/grub/grub.cfg
 	grub-mkrescue -o $(ISO) iso 2>/dev/null || \
 		grub-mkrescue -o $(ISO) iso -- -quiet
@@ -76,11 +93,11 @@ run: iso
 	$(QEMU) $(QEMU_OPTS)
 
 run-serial: iso
-	$(QEMU) -cdrom $(ISO) -m $(QEMU_MEM) -serial stdio -display gtk
+	$(QEMU) -cdrom $(ISO) -m $(QEMU_MEM) -serial stdio -display gtk $(QEMU_KBD)
 
 # Companion AI agent: serial on TCP 4444 (use with tools/companion_agent.py)
 run-ai: iso
-	$(QEMU) -cdrom $(ISO) -m $(QEMU_MEM) -serial tcp:127.0.0.1:4444,server,nowait
+	$(QEMU) -cdrom $(ISO) -m $(QEMU_MEM) -serial tcp:127.0.0.1:4444,server,nowait -display gtk $(QEMU_KBD)
 
 clean:
 	rm -rf build iso

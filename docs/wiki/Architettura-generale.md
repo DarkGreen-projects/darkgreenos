@@ -63,10 +63,13 @@ gui_loop:
 - ISO ~5 MB, kernel ~63–64 KB (target &lt; 80 KB).
 - Nessun `darkmind-q4.bin` in ISO (solo reference locale / archive).
 
-## Prossima fase (B)
+## Prossima fase (B) — in kernel v0.6
 
-- `syscall.asm` con hook RMGR per syscall
-- Scheduler cooperativo → preempt
-- PMM free-list, FS minimale
+- `syscall.asm` con hook RMGR (`int 0x80`)
+- Scheduler preempt RMGR-aware (`scheduler.asm`)
+- PMM free-list (`pmm_alloc.asm`)
+- FS minimale embedded (`fs_min.asm`)
+- `RMGR_ACT_IRQ_TIMER` cablato nel PIT
+- Fault recovery RMGR-aware (page fault / GPF user)
 
-Vedi piano in-repo (file `.plan.md` non modificati dagli agent).
+Vedi [Classico vs Orchestrator-Native](Kernel-classico-vs-Orchestrator-Native).

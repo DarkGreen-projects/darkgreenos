@@ -40,14 +40,16 @@ serial_init:
 
 serial_tx:
     push edx
+    push eax
 .wait:
     mov dx, SERIAL_LSR
     in al, dx
     test al, SERIAL_LSR_TX_EMPTY
     jz .wait
-    pop edx
+    pop eax
     mov dx, SERIAL_COM1
     out dx, al
+    pop edx
     ret
 
 serial_rx_ready:

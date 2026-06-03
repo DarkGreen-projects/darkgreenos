@@ -21,8 +21,12 @@ extern rmgr_budget_chat
 extern rmgr_budget_comp
 extern dmem_profile_load
 extern dmem_profile_write
+extern fs_load_profile
+extern fs_save_profile
+extern fs_sync
 extern rmgr_irq_kbd_count
 extern rmgr_irq_mouse_count
+extern rmgr_irq_timer_count
 extern rmgr_hook_enter
 extern rmgr_hook_leave
 
@@ -36,12 +40,14 @@ global rmgr_free_min_kb_eff
 global rmgr_free_pct_eff
 global rmgr_profile_defaults
 global rmgr_profile_load
+global rmgr_profile_reload_from_fs
 global rmgr_profile_save
 global rmgr_learn_from_delta
 global rmgr_tune_thresholds
 global rmgr_classify_action
 global rmgr_periodic_tick
 global rmgr_format_status
+global rmgr_status_buf
 global rmgr_current_action
 global rmgr_ema_dticks_class
 
@@ -97,12 +103,27 @@ rmgr_profile_load:
     push edi
     mov edi, rmgr_profile_blob
     call rmgr_profile_defaults
+    call fs_load_profile
+    test al, al
+    jnz .sync
     call dmem_profile_load
     test al, al
     jz .done
+.sync:
     call rmgr_sync_effective
 .done:
     pop edi
+    ret
+
+; Reload DGFS profile after fs_init without resetting defaults first.
+rmgr_profile_reload_from_fs:
+    call fs_load_profile
+    test al, al
+    jz .done
+    call rmgr_sync_effective
+    mov eax, [rmgr_throttle_base]
+    mov [rmgr_throttle_div], eax
+.done:
     ret
 
 rmgr_profile_save:
@@ -112,6 +133,8 @@ rmgr_profile_save:
     mov eax, [timer_ticks]
     mov [esi + RMGR_PROF_UPTIME], eax
     call dmem_profile_write
+    call fs_save_profile
+    call fs_sync
     pop esi
     ret
 
@@ -145,6 +168,10 @@ rmgr_classify_action:
     je .idle
     cmp eax, RMGR_ACTION_COMPANION
     je .comp
+    cmp eax, RMGR_ACT_TASK_SWITCH
+    je .idle
+    cmp eax, RMGR_ACT_ERR_LOG
+    je .idle
     test esi, esi
     jz .chat
     push esi
@@ -372,6 +399,16 @@ rmgr_tune_budgets:
 ; rmgr_periodic_tick() — called from IRQ, keep minimal
 rmgr_periodic_tick:
     pushad
+    cmp dword [rmgr_irq_timer_count], 0
+    je .irq_kbd_sample
+    mov eax, RMGR_ACT_IRQ_TIMER
+    call rmgr_hook_enter
+    test al, al
+    jz .clr_timer_cnt
+    call rmgr_hook_leave
+.clr_timer_cnt:
+    mov dword [rmgr_irq_timer_count], 0
+.irq_kbd_sample:
     cmp dword [rmgr_irq_kbd_count], 0
     je .irq_mouse_sample
     mov eax, RMGR_ACT_IRQ_KEYBOARD

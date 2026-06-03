@@ -25,6 +25,45 @@ Elenco dei simboli **`global`** esportati per modulo (calling convention cdecl s
 | Simbolo | Descrizione |
 |---------|-------------|
 | `gdt_load` | Carica GDT + segmenti flat |
+| `gdt_set_tss_esp0` | Stack ring-0 per interrupt da user |
+
+## `scheduler.asm`
+
+| Simbolo | Descrizione |
+|---------|-------------|
+| `scheduler_init`, `scheduler_preempt_check`, `scheduler_timer_tick` | Preempt RMGR-aware |
+| `scheduler_yield`, `scheduler_switch_to`, `scheduler_fault_kill` | Context switch |
+| `task0_main`, `task1_main` | GUI task / background task |
+| `sched_current`, `sched_bg_ticks`, `sched_task_*` | Stato task |
+
+## `syscall.asm`
+
+| Simbolo | Descrizione |
+|---------|-------------|
+| `syscall_init`, `syscall_entry` | int 0x80 (ring-3 ABI: EAX=num, EBX/ECX/EDX args) |
+| `SYS_EXIT`, `SYS_YIELD`, `SYS_WRITE`, `SYS_READ`, `SYS_OPEN`, `SYS_ALLOC`, `SYS_FREE` | Numeri syscall |
+
+## `user_task.asm`
+
+| Simbolo | Descrizione |
+|---------|-------------|
+| `task_spawn_user` | Spawn hello stub ring-3 (task 2+) |
+| `user_enter_ring3` | iret a user mode |
+
+## `fs_dgfs.asm` / `fs_min.asm`
+
+| Simbolo | Descrizione |
+|---------|-------------|
+| `fs_init`, `fs_open`, `fs_read`, `fs_close` | API FS unificata |
+| `fs_write`, `fs_sync` | DGFS RW + defer RMGR |
+| `fs_load_profile`, `fs_save_profile` | Persistenza DMTP su `rmgr.profile` |
+| `fs_embed_*` | Fallback embedded (`help.txt`, `version.txt`) |
+
+## `rmgr_predict.asm`
+
+| Simbolo | Descrizione |
+|---------|-------------|
+| `rmgr_predict_init`, `rmgr_predict_eval` | Pre-throttle da EMA classe |
 
 ## `idt.asm`
 
@@ -46,8 +85,9 @@ Elenco dei simboli **`global`** esportati per modulo (calling convention cdecl s
 
 | Simbolo | Descrizione |
 |---------|-------------|
-| `page_directory` | Directory paging |
-| `paging_init` | Abilita paging identity |
+| `page_directory`, `user_shared_pt` | Directory + PT user |
+| `paging_init`, `paging_create_task_dir`, `paging_map_user_page` | Identity + user 4K |
+| `paging_switch_cr3`, `paging_get_kernel_cr3`, `paging_free_task_dir` | CR3 per-task |
 
 ## `pit.asm`
 
@@ -118,8 +158,8 @@ Elenco dei simboli **`global`** esportati per modulo (calling convention cdecl s
 
 | Simbolo | Descrizione |
 |---------|-------------|
-| `companion_init`, `companion_poll`, `companion_exec_line` | Protocollo |
-| `companion_name`, `companion_mood`, `companion_persona` | Data |
+| `companion_init`, `companion_poll`, `companion_exec_line` | Protocollo seriale |
+| Comandi | `tasks`, `yield`, `run`, `sync`, `cat`, `policy set thr=`, `policy set budget_gui=` |
 
 ## `multiboot_parse.asm` / `mb2_parse.asm`
 
@@ -127,7 +167,7 @@ Elenco dei simboli **`global`** esportati per modulo (calling convention cdecl s
 |---------|-------------|
 | `mb_init`, `mb_ensure_info`, `mb_has_mmap`, `mb_has_mods` | MB1 |
 | `mb_print_map`, `mb_ram_total_kb`, `multiboot_info_ptr`, `multiboot_magic` | Info |
-| `mb2_parse` + `mb2_*` | Tag MB2, mmap, moduli |
+| `mb2_parse` + `mb2_*` | Tag MB2, mmap, moduli (`darkmind.memory`, `darkgreen.dgfs`) |
 
 ## `pmm.asm` / `pmm_alloc.asm`
 
@@ -140,7 +180,8 @@ Elenco dei simboli **`global`** esportati per modulo (calling convention cdecl s
 
 | Simbolo | Descrizione |
 |---------|-------------|
-| `ptr_in_identity_map` | Validazione puntatore |
+| `ptr_in_identity_map`, `ptr_in_user_region` | Validazione VA |
+| `copy_from_user`, `copy_to_user` | Copia buffer user |
 
 ## `sysres.asm`
 

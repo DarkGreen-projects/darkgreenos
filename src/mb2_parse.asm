@@ -15,7 +15,10 @@ global mb2_model_cmdline
 global mb2_memory_start
 global mb2_memory_end
 global mb2_memory_size
-global mb2_memory_cmdline
+global mb2_dgfs_start
+global mb2_dgfs_end
+global mb2_dgfs_size
+global mb2_dgfs_cmdline
 global mb2_mmap_addr
 global mb2_mmap_length
 global mb2_mmap_entry_size
@@ -30,6 +33,10 @@ mb2_memory_start:        resd 1
 mb2_memory_end:          resd 1
 mb2_memory_size:         resd 1
 mb2_memory_cmdline:      resd 1
+mb2_dgfs_start:          resd 1
+mb2_dgfs_end:            resd 1
+mb2_dgfs_size:           resd 1
+mb2_dgfs_cmdline:        resd 1
 mb2_mmap_addr:           resd 1
 mb2_mmap_length:         resd 1
 mb2_mmap_entry_size:     resd 1
@@ -53,6 +60,10 @@ mb2_parse:
     mov dword [mb2_memory_end], 0
     mov dword [mb2_memory_size], 0
     mov dword [mb2_memory_cmdline], 0
+    mov dword [mb2_dgfs_start], 0
+    mov dword [mb2_dgfs_end], 0
+    mov dword [mb2_dgfs_size], 0
+    mov dword [mb2_dgfs_cmdline], 0
     mov dword [mb2_mmap_addr], 0
     mov dword [mb2_mmap_length], 0
     mov dword [mb2_mmap_entry_size], 0
@@ -144,6 +155,31 @@ mb2_parse:
     mov esi, edx
     cmp dword [mb2_module_match], 0
     jnz .store_memory
+    push eax
+    push ebx
+    push edx
+    push ecx
+    mov esi, ecx
+    mov edi, mod_dgfs
+    call mb2_prefix
+    movzx eax, al
+    mov [mb2_module_match], eax
+    pop ecx
+    pop edx
+    pop ebx
+    pop eax
+    mov esi, edx
+    cmp dword [mb2_module_match], 0
+    jnz .store_dgfs
+    jmp .next
+.store_dgfs:
+    cmp dword [mb2_dgfs_start], 0
+    jne .next
+    mov [mb2_dgfs_start], eax
+    mov [mb2_dgfs_end], ebx
+    sub ebx, eax
+    mov [mb2_dgfs_size], ebx
+    mov [mb2_dgfs_cmdline], ecx
     jmp .next
 .store_model:
     cmp dword [mb2_model_start], 0
@@ -245,3 +281,4 @@ mb2_prefix:
 section .rodata
 mod_model:  db "darkmind.model", 0
 mod_memory: db "darkmind.memory", 0
+mod_dgfs:   db "darkgreen.dgfs", 0
